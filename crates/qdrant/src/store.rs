@@ -231,25 +231,28 @@ impl MemoryStore for QdrantStore {
 
         // Scroll through points with pagination
         let mut all = Vec::new();
-        let mut has_more = true;
+        let mut offset = None;
 
-        while has_more {
-            let scroll_result = self
-                .client
-                .scroll(
-                    ScrollPointsBuilder::new(&self.collection_name)
-                        .filter(filter.clone().unwrap_or_default())
-                        .with_payload(true)
-                        .limit(limit.min(u32::MAX as usize) as u32),
-                )
-                .await;
+        loop {
+            let builder = ScrollPointsBuilder::new(&self.collection_name)
+                .filter(filter.clone().unwrap_or_default())
+                .with_payload(true)
+                .limit(limit.min(u32::MAX as usize) as u32);
+            let builder = match offset {
+                Some(id) => builder.offset(id),
+                None => builder,
+            };
+            let scroll_result = self.client.scroll(builder).await;
 
             match scroll_result {
                 Ok(result) => {
                     for point in result.result {
                         all.push(point_to_record(&point));
                     }
-                    has_more = result.next_page_offset.is_some();
+                    offset = result.next_page_offset;
+                    if offset.is_none() {
+                        break;
+                    }
                 }
                 Err(e) => {
                     return Err(format!("Error scanning collection: {e}"));
@@ -287,21 +290,24 @@ impl MemoryStore for QdrantStore {
         } else {
             // For wildcard, we need to scroll and count manually
             let mut total_count = 0;
-            let mut has_more = true;
-            while has_more {
-                let scroll_result = self
-                    .client
-                    .scroll(
-                        ScrollPointsBuilder::new(&self.collection_name)
-                            .with_payload(true)
-                            .limit(100),
-                    )
-                    .await;
+            let mut offset = None;
+            loop {
+                let builder = ScrollPointsBuilder::new(&self.collection_name)
+                    .with_payload(true)
+                    .limit(100);
+                let builder = match offset {
+                    Some(id) => builder.offset(id),
+                    None => builder,
+                };
+                let scroll_result = self.client.scroll(builder).await;
 
                 match scroll_result {
                     Ok(result) => {
                         total_count += result.result.len();
-                        has_more = result.next_page_offset.is_some();
+                        offset = result.next_page_offset;
+                        if offset.is_none() {
+                            break;
+                        }
                     }
                     Err(_) => break,
                 }
@@ -320,17 +326,17 @@ impl MemoryStore for QdrantStore {
         let all_projects = project == "*";
         let mut per_project: BTreeMap<String, usize> = BTreeMap::new();
 
-        let mut has_more = true;
-        while has_more {
-            let scroll_result = self
-                .client
-                .scroll(
-                    ScrollPointsBuilder::new(&self.collection_name)
-                        .filter(scroll_filter.clone().unwrap_or_default())
-                        .with_payload(true)
-                        .limit(100),
-                )
-                .await;
+        let mut offset = None;
+        loop {
+            let builder = ScrollPointsBuilder::new(&self.collection_name)
+                .filter(scroll_filter.clone().unwrap_or_default())
+                .with_payload(true)
+                .limit(100);
+            let builder = match offset {
+                Some(id) => builder.offset(id),
+                None => builder,
+            };
+            let scroll_result = self.client.scroll(builder).await;
 
             match scroll_result {
                 Ok(result) => {
@@ -349,7 +355,10 @@ impl MemoryStore for QdrantStore {
                             *per_project.entry(proj.to_string()).or_insert(0) += 1;
                         }
                     }
-                    has_more = result.next_page_offset.is_some();
+                    offset = result.next_page_offset;
+                    if offset.is_none() {
+                        break;
+                    }
                 }
                 Err(e) => {
                     return Err(format!("Error scanning collection for stats: {e}"));
