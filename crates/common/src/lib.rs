@@ -10,3 +10,5 @@ pub mod store;
 
 /// Default project name used when the caller does not specify one.
 pub const DEFAULT_PROJECT: &str = "default";
+
+pub use actors::embedding::Embedder;

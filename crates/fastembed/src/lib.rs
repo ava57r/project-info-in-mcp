@@ -1,8 +1,15 @@
+//! Local embedding inference backend built on top of `fastembed`.
+//!
+//! This crate provides a standalone [`FastembedBackend`] and a Kameo
+//! [`EmbeddingActor`] that implements the
+//! [`piim_common::actors::embedding::Embedder`] trait using local model
+//! inference (no external embeddings service required).
+
 use std::sync::Mutex;
 
-use crate::actors::embedding;
 use async_trait::async_trait;
 use kameo::actor::{Actor, ActorRef};
+use piim_common::actors::embedding;
 
 /// Model name used in the HTTP config that maps to a local fastembed model.
 #[derive(Debug, Clone, PartialEq)]
@@ -157,11 +164,11 @@ impl FastembedBackend {
 
 /// Kameo actor that requests text embeddings.
 ///
-/// When the `fastembed` feature is enabled, the actor can operate in
-/// local mode using fastembed (no external service needed).
-/// Otherwise it always calls the HTTP embeddings endpoint.
+/// The actor operates in local mode using fastembed (no external service
+/// needed).
 pub struct EmbeddingActor {
     backend: FastembedBackend,
+    model: FastembedModel,
 }
 
 impl EmbeddingActor {
@@ -170,7 +177,8 @@ impl EmbeddingActor {
     /// The model weights are downloaded on first call if not yet cached.
     pub fn new_fastembed(model: FastembedModel) -> anyhow::Result<Self> {
         Ok(EmbeddingActor {
-            backend: FastembedBackend::new(model)?,
+            backend: FastembedBackend::new(model.clone())?,
+            model: model,
         })
     }
 }
@@ -195,5 +203,9 @@ impl embedding::Embedder for EmbeddingActor {
             .embed(&texts)
             .map(|mut v| v.pop().unwrap_or_default())
             .map_err(|e| e.to_string())
+    }
+
+    fn dimension(&self) -> usize {
+        self.model.dimension()
     }
 }

@@ -1,10 +1,5 @@
 use kameo::actor::{ActorRef, Spawn};
-#[cfg(feature = "fastembed")]
-use piim_common::actors::embedding::fastembed;
-use piim_common::actors::{
-    embedding::{self, config::EmbeddingBackend, http},
-    project_info::ProjectInfoActor,
-};
+use piim_common::actors::project_info::ProjectInfoActor;
 use qdrant_client::Qdrant;
 use rust_mcp_sdk::error::SdkResult;
 
@@ -14,7 +9,9 @@ mod config;
 mod helpers;
 mod store;
 
-pub async fn init_project_actor() -> SdkResult<ActorRef<ProjectInfoActor>> {
+pub async fn init_project_actor(
+    embed_actor: Box<dyn piim_common::Embedder>,
+) -> SdkResult<ActorRef<ProjectInfoActor>> {
     let config = Config::get_from_env();
 
     // Initialize Qdrant client
@@ -34,33 +31,19 @@ pub async fn init_project_actor() -> SdkResult<ActorRef<ProjectInfoActor>> {
         &client,
         &config.collection_name,
         &config.model,
-        config.vector_dimension,
+        embed_actor.dimension(),
     )
     .await
     .map_err(|e| rust_mcp_sdk::error::McpSdkError::Internal {
         description: e.to_string(),
     })?;
 
-    // Create the appropriate embedding actor based on the selected backend.
-    let embed_actor = match &config.embedding_backend {
-        EmbeddingBackend::Http => Box::new(http::EmbeddingActor::new(
-            config.embeddings_url.clone(),
-            config.model.clone(),
-            None,
-        )) as Box<dyn embedding::Embedder>,
-        #[cfg(feature = "fastembed")]
-        EmbeddingBackend::Fastembed(model) => {
-            let actor = fastembed::EmbeddingActor::new_fastembed(model.clone()).map_err(|e| {
-                rust_mcp_sdk::error::McpSdkError::Internal {
-                    description: format!("Failed to initialize local embedding model: {e}"),
-                }
-            })?;
-
-            Box::new(actor) as Box<dyn embedding::Embedder>
-        }
-    };
-
-    let store = store::QdrantStore::new(client, config.collection_name, config.model.clone());
+    let store = store::QdrantStore::new(
+        client,
+        config.collection_name,
+        config.model.clone(),
+        embed_actor.dimension(),
+    );
 
     Ok(ProjectInfoActor::spawn(ProjectInfoActor::new(
         Box::new(store),
