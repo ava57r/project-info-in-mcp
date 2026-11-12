@@ -4,7 +4,7 @@ members = ["crates/common", "crates/lancedb", "crates/qdrant"]
 
 [package]
 name = "piim"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2024"
 
 [dependencies]
