@@ -28,18 +28,25 @@ pub struct EmbeddingActor {
     embeddings_url: String,
     model: String,
     pooling: Option<String>,
+    vector_dimension: usize,
 }
 
 impl EmbeddingActor {
     /// Creates the actor with the given HTTP client,
     /// embeddings endpoint URL, model name, and
     /// optional pooling strategy.
-    pub fn new(embeddings_url: String, model: String, pooling: Option<String>) -> Self {
+    pub fn new(
+        embeddings_url: String,
+        model: String,
+        pooling: Option<String>,
+        vector_dimension: usize,
+    ) -> Self {
         EmbeddingActor {
             http_client: Client::new(),
             embeddings_url,
             model,
             pooling,
+            vector_dimension,
         }
     }
 }
@@ -80,5 +87,9 @@ impl Embedder for EmbeddingActor {
         } else {
             Err("Model returned empty vectors array".to_string())
         }
+    }
+
+    fn dimension(&self) -> usize {
+        self.vector_dimension
     }
 }

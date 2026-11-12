@@ -11,7 +11,6 @@ use qdrant_client::qdrant::{
     ScrollPointsBuilder, SearchPointsBuilder, UpsertPointsBuilder, Value,
 };
 
-use crate::config::Config;
 use crate::helpers::{build_filter, build_point, ensure_collection};
 
 /// Storage backed by a Qdrant collection.
@@ -19,15 +18,22 @@ pub struct QdrantStore {
     client: Qdrant,
     collection_name: String,
     vector_name: String,
+    vector_dimension: usize,
 }
 
 impl QdrantStore {
     /// Creates a store for an already-initialized Qdrant collection.
-    pub fn new(client: Qdrant, collection_name: String, vector_name: String) -> Self {
+    pub fn new(
+        client: Qdrant,
+        collection_name: String,
+        vector_name: String,
+        vector_dimension: usize,
+    ) -> Self {
         Self {
             client,
             collection_name,
             vector_name,
+            vector_dimension,
         }
     }
 }
@@ -435,7 +441,7 @@ impl MemoryStore for QdrantStore {
             &self.client,
             &self.collection_name,
             &self.vector_name,
-            Config::get_from_env().vector_dimension,
+            self.vector_dimension,
         )
         .await
         .map_err(|e| format!("Error re-opening collection: {e}"))?;

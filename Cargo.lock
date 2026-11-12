@@ -5296,11 +5296,12 @@ dependencies = [
 
 [[package]]
 name = "piim"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "cfg-if",
  "kameo",
  "piim-common",
+ "piim-fastembed",
  "piim-lance",
  "piim-qdrant",
  "rust-mcp-sdk",
@@ -5309,13 +5310,11 @@ dependencies = [
 
 [[package]]
 name = "piim-common"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "candle-core",
  "dirs 7.0.0",
- "fastembed",
  "hex",
  "kameo",
  "reqwest 0.13.5",
@@ -5326,8 +5325,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "piim-fastembed"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "candle-core",
+ "fastembed",
+ "kameo",
+ "piim-common",
+]
+
+[[package]]
 name = "piim-lance"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "arrow-array",
  "arrow-schema",
@@ -5350,7 +5361,7 @@ dependencies = [
 
 [[package]]
 name = "piim-qdrant"
-version = "0.4.2"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "async-trait",

@@ -2,21 +2,17 @@
 
 use std::env;
 
-use piim_common::{actors::embedding::config::EmbeddingBackend, config::CommonConfig};
+use piim_common::config::CommonConfig;
 
 /// Runtime configuration loaded from environment
 /// variables, with fallback defaults.
 pub struct Config {
     /// Path to the LanceDB database directory (`LANCEDB_PATH`).
     pub db_dir: String,
-    /// URL of the OpenAI-compatible embeddings endpoint (`EMBEDDINGS_URL`).
-    pub embeddings_url: String,
     /// Embedding model name (`EMBEDDINGS_MODEL`).
     pub model: String,
     /// Expected embedding vector dimension (`VECTOR_DIMENSION`).
     pub vector_dimension: usize,
-    /// Embedding backend selection.
-    pub embedding_backend: EmbeddingBackend,
     /// Default project name used to scope records (`PROJECT_NAME`).
     ///
     /// Multiple projects can share one LanceDB database: every record carries
@@ -40,15 +36,10 @@ impl Config {
 
         let common = CommonConfig::from_env();
 
-        let embedding_backend = EmbeddingBackend::from_env();
-        let vector_dimension = embedding_backend.dimension();
-
         Config {
             db_dir,
-            embeddings_url: common.embeddings_url,
             model: common.model,
-            vector_dimension,
-            embedding_backend,
+            vector_dimension: common.vector_dimension,
             project: common.project,
             http_port: env::var("HTTP_PORT")
                 .ok()

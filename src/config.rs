@@ -1,6 +1,8 @@
+//! Runtime configuration loaded from environment variables.
+
 use std::env;
 
-use crate::config::CommonConfig;
+use piim_common::config::CommonConfig;
 
 /// Embedding backend selection.
 #[derive(Debug, Clone, PartialEq)]
@@ -9,7 +11,7 @@ pub enum EmbeddingBackend {
     Http,
     /// Use local inference via fastembed.
     #[cfg(feature = "fastembed")]
-    Fastembed(super::fastembed::FastembedModel),
+    Fastembed(piim_fastembed::FastembedModel),
 }
 
 impl EmbeddingBackend {
@@ -23,9 +25,7 @@ impl EmbeddingBackend {
             Some("fastembed") => {
                 let model_name =
                     env::var("EMBEDDINGS_MODEL").unwrap_or_else(|_| "qwen3-embed".to_string());
-                Self::Fastembed(super::fastembed::FastembedModel::from_http_name(
-                    &model_name,
-                ))
+                Self::Fastembed(piim_fastembed::FastembedModel::from_http_name(&model_name))
             }
             #[cfg(feature = "fastembed")]
             Some(_) | None => Self::Http,
@@ -33,16 +33,28 @@ impl EmbeddingBackend {
             _ => Self::Http,
         }
     }
+}
 
-    /// Return the vector dimension for this backend.
-    pub fn dimension(&self) -> usize {
-        match self {
-            Self::Http => {
-                // For HTTP we fall back to the common config value
-                CommonConfig::from_env().vector_dimension
-            }
-            #[cfg(feature = "fastembed")]
-            Self::Fastembed(model) => model.dimension(),
+/// Runtime configuration loaded from environment
+/// variables, with fallback defaults.
+pub struct Config {
+    /// Embedding backend selection.
+    pub embedding_backend: EmbeddingBackend,
+
+    pub common: CommonConfig,
+}
+
+impl Config {
+    /// Loads configuration from environment variables,
+    /// falling back to defaults when unset or invalid.
+    pub fn get_from_env() -> Config {
+        let backend = EmbeddingBackend::from_env();
+
+        let common = CommonConfig::from_env();
+
+        Config {
+            embedding_backend: backend,
+            common,
         }
     }
 }

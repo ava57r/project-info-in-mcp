@@ -3,7 +3,7 @@
 use std::env;
 
 use crate::helpers::DEFAULT_COLLECTION;
-use piim_common::{actors::embedding::config::EmbeddingBackend, config::CommonConfig};
+use piim_common::config::CommonConfig;
 
 /// Runtime configuration loaded from environment
 /// variables, with fallback defaults.
@@ -14,19 +14,8 @@ pub struct Config {
     pub qdrant_api_key: Option<String>,
     /// Name of the Qdrant collection (`QDRANT_COLLECTION`).
     pub collection_name: String,
-    /// URL of the OpenAI-compatible embeddings endpoint (`EMBEDDINGS_URL`).
-    /// Used only when [`Self::embedding_backend`] is
-    /// [`EmbeddingBackend::Http`].
-    pub embeddings_url: String,
     /// Embedding model name (`EMBEDDINGS_MODEL`).
     pub model: String,
-    /// Embedding backend selection.
-    pub embedding_backend: EmbeddingBackend,
-    /// Expected embedding vector dimension (`VECTOR_DIMENSION`).
-    ///
-    /// For local backend this is derived from the model automatically,
-    /// but kept for backwards compatibility.
-    pub vector_dimension: usize,
     /// Default project name used to scope records (`PROJECT_NAME`).
     ///
     /// Multiple projects can share one Qdrant collection:
@@ -50,17 +39,12 @@ impl Config {
             env::var("QDRANT_COLLECTION").unwrap_or_else(|_| DEFAULT_COLLECTION.to_string());
 
         let common = CommonConfig::from_env();
-        let backend = EmbeddingBackend::from_env();
-        let vector_dimension = backend.dimension();
 
         Config {
             qdrant_url,
             qdrant_api_key,
             collection_name,
-            embeddings_url: common.embeddings_url,
             model: common.model,
-            embedding_backend: backend,
-            vector_dimension,
             project: common.project,
         }
     }
