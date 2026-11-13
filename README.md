@@ -48,6 +48,12 @@ Build with Qdrant backend:
 cargo build --release -p piim --no-default-features --features qdrant_store
 ```
 
+Add the `fastembed` feature to enable in-process local embeddings (`EMBEDDINGS_BACKEND=fastembed`) — it composes with either storage backend:
+
+```bash
+cargo build --release -p piim --features "lance_store fastembed"
+```
+
 Run the selected backend:
 
 ```bash
@@ -60,10 +66,63 @@ Both `crates/lancedb` and `crates/qdrant` are library-only — they provide `ini
 
 ## Configuration
 
-Shared env vars (used by both backends): `EMBEDDINGS_URL` (`http://localhost:8002/v1/embeddings`), `EMBEDDINGS_MODEL` (`qwen3-embed`), `VECTOR_DIMENSION` (`1024`), `PROJECT_NAME` (`default`). Backend-specific storage settings:
+Embedding settings are shared by both backends and parsed centrally in the `piim` binary (`src/config.rs` → `EmbeddingBackend::from_env()`, then `piim_common::config::CommonConfig`). Any unrecognized `EMBEDDINGS_BACKEND` value falls back to `http`:
+
+| Variable | Default | Description |
+|---|---|---|
+| `EMBEDDINGS_BACKEND` | `http` | Embedding backend: `http` (external OpenAI-compatible API) or `fastembed` (local inference, no service needed). |
+| `EMBEDDINGS_URL` | `http://localhost:8002/v1/embeddings` | Embeddings endpoint (OpenAI-compatible). Only used when `EMBEDDINGS_BACKEND=http`. |
+| `EMBEDDINGS_MODEL` | `qwen3-embed` | Model name: sent as `model` in the HTTP embedding request, or mapped to a local fastembed model (see the table below) when `EMBEDDINGS_BACKEND=fastembed`. |
+| `VECTOR_DIMENSION` | `1024` | Expected embedding size; upserts fail fast on a mismatch. Auto-detected from the local model when `EMBEDDINGS_BACKEND=fastembed`. |
+| `PROJECT_NAME` | `default` | Default project scope for all records; overridable per tool call via the optional `project` argument. |
+| `FASTEMBED_CACHE_DIR` | `~/.cache/fastembed` | Model cache directory. Only used when `EMBEDDINGS_BACKEND=fastembed`. |
+
+Backend-specific storage settings:
 
 - **LanceDB** (`piim --features lance_store`): `LANCEDB_PATH`, `HTTP_PORT`, `SNAPSHOT_DIR` — see [crates/lancedb/README.md](crates/lancedb/README.md).
-- **Qdrant** (`piim --no-default-features --features qdrant_store`): `QDRANT_URL`, `QDRANT_API_KEY`, `QDRANT_COLLECTION`, `EMBEDDINGS_BACKEND` — see [crates/qdrant/README.md](crates/qdrant/README.md).
+- **Qdrant** (`piim --no-default-features --features qdrant_store`): `QDRANT_URL` (default `http://localhost:6334`), `QDRANT_API_KEY`, `QDRANT_COLLECTION` — see [crates/qdrant/README.md](crates/qdrant/README.md). `qdrant-client` speaks **gRPC**, so `QDRANT_URL` must point at the gRPC port **6334**, not the REST/dashboard port 6333 (`docker run -p 6333:6333 -p 6334:6334 qdrant/qdrant`).
+
+### Embedding backends
+
+**HTTP (default)** — any OpenAI-compatible embeddings endpoint (Qwen3-embed, TEI, vLLM, …):
+
+```bash
+export EMBEDDINGS_BACKEND="http"
+export EMBEDDINGS_URL="http://localhost:8002/v1/embeddings"
+export EMBEDDINGS_MODEL="qwen3-embed"
+export VECTOR_DIMENSION=1024
+```
+
+**Local (fastembed)** — no external service; inference runs in-process via
+[fastembed-rs](https://github.com/anush008/fastembed-rs) (`crates/fastembed`). It
+requires the `fastembed` Cargo feature, which can be combined with either storage
+backend (e.g. `cargo build --release --features "lance_store fastembed"`); without
+that feature `EMBEDDINGS_BACKEND=fastembed` silently falls back to `http`.
+
+```bash
+export EMBEDDINGS_BACKEND="fastembed"
+export EMBEDDINGS_MODEL="bge-small-en"   # or "qwen3-embed"
+```
+
+`VECTOR_DIMENSION` is derived from the selected model, so switching models changes
+the vector size: the LanceDB table must be recreated (or `LANCEDB_PATH` moved
+aside), while Qdrant can keep several models side by side as named vectors (see
+[which backend to pick](#lancedb-vs-qdrant--which-backend-to-pick)). The first
+run downloads the model (~100 MB–8 GB depending on model); later runs use the
+cache with no network needed. Set `FASTEMBED_CACHE_DIR` to move the cache off the
+platform default (e.g. `~/.cache/fastembed`).
+
+| `EMBEDDINGS_MODEL` name | Dimensions | Params | Notes |
+|---|---|---|---|
+| `bge-small-en` / `bge-small-en-v1.5` | 384 | 130M | Default ONNX model (fallback for unknown names) |
+| `bge-base-en` / `bge-base-en-v1.5` | 768 | 110M | |
+| `bge-large-en` / `bge-large-en-v1.5` | 1024 | 335M | |
+| `nomic-embed-text` / `nomic-embed-text-v1` | 768 | 27M | |
+| `nomic-embed-text-v1.5` | 768 | 27M | |
+| `all-MiniLM-L6-v2` / `minilm-l6` | 384 | 22M | |
+| `qwen3-embed` / `qwen3-embedding-0.6b` | 1024 | 0.6B | Candle-based, uses the `qwen3` feature of `fastembed-rs` (enabled in `crates/fastembed`) |
+| `qwen3-embedding-4b` | 4096 | 4B | Candle-based, `qwen3` feature |
+| `qwen3-embedding-8b` | 4096 | 8B | Candle-based, `qwen3` feature |
 
 ## Client setup (opencode)
 
@@ -125,7 +184,7 @@ Both backends expose the same 7 MCP tools and share the `piim-common` core (acto
 | | LanceDB backend (`piim --features lance_store`) | Qdrant backend (`piim --no-default-features --features qdrant_store`) |
 |---|---|---|
 | Crate / version used | `lancedb` **0.40.0** (`crates/lancedb/Cargo.toml`), library `piim-lance` 0.2.0 | `qdrant-client` **1.19** (`crates/qdrant/Cargo.toml`), library `piim-qdrant` 0.3.1 |
-| Deployment | Embedded — no extra service. Data lives in a local directory (`LANCEDB_PATH`, default `./.opencode_memory/lance_db`). | Remote server — requires a running Qdrant (`QDRANT_URL`, default `http://localhost:6333`, e.g. `docker run -p 6333:6333 qdrant/qdrant`). Optional `QDRANT_API_KEY` auth. |
+| Deployment | Embedded — no extra service. Data lives in a local directory (`LANCEDB_PATH`, default `./.opencode_memory/lance_db`). | Remote server — requires a running Qdrant (`QDRANT_URL`, default `http://localhost:6334` — the **gRPC** port; e.g. `docker run -p 6333:6333 -p 6334:6334 qdrant/qdrant`). Optional `QDRANT_API_KEY` auth. |
 | Storage unit | One Arrow table `project_memory` (`id`, `project`, `content`, `vector`, `category`, `file_hash`, `timestamp`). | One collection (`QDRANT_COLLECTION`, default `project_memory`); each record is a point with a UUID point-id and the same fields as JSON payload. |
 | Search | True hybrid: ANN vector search + FTS index on `content` (index auto-created on first search), with `project`/`category` SQL predicates. | Filtered vector search (Cosine distance) via `SearchPointsBuilder` with payload filters on `project`/`category`. No FTS index — keyword matching relies on embeddings. |
 | Multi-model support | One table = one `VECTOR_DIMENSION`; changing the embedding model requires recreating the table (fail-fast if the `project` column is missing on old tables). | Named vectors per embedding model (`vector_name` = `EMBEDDINGS_MODEL`); one collection can hold vectors from several models side by side, plus keyword payload indexes on `id`/`project`/`category`. |

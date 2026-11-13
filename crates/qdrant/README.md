@@ -5,7 +5,7 @@ Qdrant storage backend library for PIIM (Project Info In MCP). Provides `QdrantS
 ## Prerequisites
 
 - **Qdrant** — vector database server (local or remote)
-- **Embeddings** — either an external API endpoint or local inference via [fastembed-rs](https://github.com/anush008/fastembed-rs)
+- **Embeddings** — either an external API endpoint or local inference via [fastembed-rs](https://github.com/anush008/fastembed-rs) (see [Embedding backends](../../README.md#embedding-backends) in the workspace README)
 
 ### Running Qdrant
 
@@ -23,69 +23,12 @@ Or connect to an existing remote server.
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `QDRANT_URL` | Yes | `http://localhost:6334` | Qdrant server URL. |
+| `QDRANT_URL` | Yes | `http://localhost:6334` | Qdrant server URL. Must be the **gRPC** port (6334) — `qdrant-client` talks gRPC; 6333 is REST/dashboard. |
 | `QDRANT_API_KEY` | No | — | API key for authentication. |
 | `QDRANT_COLLECTION` | No | `project_memory` | Name of the Qdrant collection. |
-| `EMBEDDINGS_BACKEND` | No | `http` | Embedding backend: `http` (external API) or `fastembed` (local inference). |
-| `EMBEDDINGS_URL` | Yes (http) | `http://localhost:8002/v1/embeddings` | Embeddings API URL (OpenAI-compatible). Ignored when `local`. |
-| `EMBEDDINGS_MODEL` | No | `qwen3-embed` | Embedding model name. |
-| `VECTOR_DIMENSION` | No | `1024` | Expected embedding vector size (auto-detected for `local`). |
 | `PROJECT_NAME` | No | `default` | Default project scope. Overridable per tool call. |
-| `FASTEMBED_CACHE_DIR` | No | `~/.cache/fastembed` | Custom directory for fastembed model cache. Only used when `EMBEDDINGS_BACKEND=fastembed`. |
 
-## Local Embeddings (fastembed)
-
-Set `EMBEDDINGS_BACKEND=fastembed` to run embeddings locally without an external API. Models are downloaded once and cached.
-
-**Supported models:**
-
-| Model Name | Dimensions | Params | Notes |
-|---|---|---|---|
-| `bge-small-en` / `bge-small-en-v1.5` | 384 | 130M | Default ONNX model |
-| `bge-base-en` / `bge-base-en-v1.5` | 768 | 110M | |
-| `bge-large-en` / `bge-large-en-v1.5` | 1024 | 335M | |
-| `nomic-embed-text` / `nomic-embed-text-v1` | 768 | 27M | |
-| `nomic-embed-text-v1.5` | 768 | 27M | |
-| `all-MiniLM-L6-v2` / `minilm-l6` | 384 | 22M | |
-| `qwen3-embed` / `qwen3-embedding-0.6b` | 1024 | 0.6B | Requires `qwen3` feature |
-| `qwen3-embedding-4b` | 4096 | 4B | Requires `qwen3` feature |
-| `qwen3-embedding-8b` | 4096 | 8B | Requires `qwen3` feature |
-
-**Example with local BGE model:**
-
-```bash
-export QDRANT_URL="http://localhost:6334"
-export EMBEDDINGS_BACKEND="fastembed"
-export EMBEDDINGS_MODEL="bge-small-en"
-export PROJECT_NAME="my-project"
-```
-
-**Example with local Qwen3 model:**
-
-```bash
-export QDRANT_URL="http://localhost:6334"
-export EMBEDDINGS_BACKEND="fastembed"
-export EMBEDDINGS_MODEL="qwen3-embed"
-export PROJECT_NAME="my-project"
-```
-
-> **Note:** The first run downloads the model (~100MB–8GB depending on model). Subsequent runs use the cached model with no network needed.
-
-> **Custom cache directory:** By default, fastembed downloads models to a platform-specific cache directory (e.g. `~/.cache/fastembed`). Override this with the `FASTEMBED_CACHE_DIR` environment variable:
->
-> ```bash
-> export FASTEMBED_CACHE_DIR="/path/to/custom/cache"
-> ```
-
-Example (HTTP backend):
-
-```bash
-export QDRANT_URL="http://localhost:6334"
-export EMBEDDINGS_URL="http://localhost:8002/v1/embeddings"
-export EMBEDDINGS_MODEL="qwen3-embed"
-export VECTOR_DIMENSION=1024
-export PROJECT_NAME="my-project"
-```
+> Embedding settings (`EMBEDDINGS_BACKEND`, `EMBEDDINGS_URL`, `EMBEDDINGS_MODEL`, `VECTOR_DIMENSION`, `FASTEMBED_CACHE_DIR`) are shared by both backends and documented in the workspace README: [Configuration](../../README.md#configuration) and [Embedding backends](../../README.md#embedding-backends). Qdrant-specific note: `EMBEDDINGS_MODEL` also names the collection vector, so several models can coexist in one collection.
 
 ## Usage
 

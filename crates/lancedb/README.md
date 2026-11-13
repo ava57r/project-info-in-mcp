@@ -2,7 +2,7 @@
 
 LanceDB storage backend library for PIIM (Project Info In MCP). Provides `LanceStore` and `init_project_actor()` for use with the `piim` binary or any downstream project via the `lance_store` Cargo feature.
 
-Part of the [PIIM (Project Info In MCP)](../../README.md) workspace. Both backends are driven by **`piim-common`** (`crates/common`): `kameo` actors (`ProjectInfoActor` + `EmbeddingActor`), the MCP tool layer, and the `MemoryStore` backend trait. Embeddings come from either an external OpenAI-compatible API (e.g. Qwen3-embed, TEI, vLLM) or local inference via [fastembed-rs](https://github.com/anush008/fastembed-rs) (see [Local embeddings](#local-embeddings-fastembed) below).
+Part of the [PIIM (Project Info In MCP)](../../README.md) workspace. Both backends are driven by **`piim-common`** (`crates/common`): `kameo` actors (`ProjectInfoActor` + `EmbeddingActor`), the MCP tool layer, and the `MemoryStore` backend trait. Embeddings come from either an external OpenAI-compatible API (e.g. Qwen3-embed, TEI, vLLM) or local inference via [fastembed-rs](https://github.com/anush008/fastembed-rs) (see [Embedding backends](../../README.md#embedding-backends) in the workspace README).
 
 ## Features
 
@@ -36,38 +36,19 @@ let actor = init_project_actor().await?;
 
 ## Environment Variables
 
+LanceDB-specific settings:
+
 | Env var | Default | Description |
 |---|---|---|
 | `LANCEDB_PATH` | `./.opencode_memory/lance_db` | LanceDB storage directory (created on first run). |
-| `EMBEDDINGS_BACKEND` | `http` | Embedding backend: `http` (external OpenAI-compatible API) or `fastembed` (local inference, no service needed). |
-| `EMBEDDINGS_URL` | `http://localhost:8002/v1/embeddings` | Embeddings HTTP endpoint (OpenAI-compatible). Only used when `EMBEDDINGS_BACKEND=http`. |
-| `EMBEDDINGS_MODEL` | `qwen3-embed` | Model name: sent as `model` in the HTTP embedding request, or mapped to a local fastembed model (see table below) when `EMBEDDINGS_BACKEND=fastembed`. |
-| `VECTOR_DIMENSION` | `1024` | Expected embedding size; upsert fails fast on mismatch. Ignored when `EMBEDDINGS_BACKEND=fastembed` (dimension is auto-detected from the local model). |
-| `PROJECT_NAME` | `default` | Default project scope for all records; one shared DB can hold many projects. Overridable per tool call via the optional `project` argument. |
 | `HTTP_PORT` | `6333` | Port for the built-in REST API + dashboard (Qdrant-style). Set to `0` or empty to disable HTTP (stdio MCP only). |
 | `SNAPSHOT_DIR` | `./.opencode_memory/snapshots` | Directory where `.tar.gz` DB snapshots are stored. |
 
-> Backend selection is parsed centrally in `piim-common` (`EmbeddingBackend::from_env()`): any other `EMBEDDINGS_BACKEND` value falls back to `http`.
+> Embedding settings (`EMBEDDINGS_BACKEND`, `EMBEDDINGS_URL`, `EMBEDDINGS_MODEL`, `VECTOR_DIMENSION`, `PROJECT_NAME`) are shared by both backends and documented in the workspace README: [Configuration](../../README.md#configuration).
 
 ## Local embeddings (fastembed)
 
-Set `EMBEDDINGS_BACKEND=fastembed` to run embeddings locally without an external API. Models are downloaded once on first use and cached. `VECTOR_DIMENSION` is auto-detected, so you must create (or recreate) the `project_memory` table with the matching dimension — changing the model later requires a fresh `LANCEDB_PATH`.
-
-**Supported models:**
-
-| Model Name | Dimensions | Params | Notes |
-|---|---|---|---|
-| `bge-small-en` / `bge-small-en-v1.5` | 384 | 130M | Default ONNX model (fallback for unknown names) |
-| `bge-base-en` / `bge-base-en-v1.5` | 768 | 110M | |
-| `bge-large-en` / `bge-large-en-v1.5` | 1024 | 335M | |
-| `nomic-embed-text` / `nomic-embed-text-v1` | 768 | 27M | |
-| `nomic-embed-text-v1.5` | 768 | 27M | |
-| `all-MiniLM-L6-v2` / `minilm-l6` | 384 | 22M | |
-| `qwen3-embed` / `qwen3-embedding-0.6b` | 1024 | 0.6B | Candle-based, requires `qwen3` feature (enabled by default) |
-| `qwen3-embedding-4b` | 4096 | 4B | Candle-based, requires `qwen3` feature |
-| `qwen3-embedding-8b` | 4096 | 8B | Candle-based, requires `qwen3` feature |
-
-**Example with local BGE model:**
+Model names, dimensions, cache location and the Cargo feature gate are documented once in the workspace README: [Embedding backends](../../README.md#embedding-backends). LanceDB-specific caveat: `VECTOR_DIMENSION` is auto-detected from the local model, so the `project_memory` table must be created with that dimension — changing the model later requires a fresh `LANCEDB_PATH`.
 
 ```bash
 export LANCEDB_PATH="./.opencode_memory/lance_db"
@@ -75,17 +56,6 @@ export EMBEDDINGS_BACKEND="fastembed"
 export EMBEDDINGS_MODEL="bge-small-en"
 export PROJECT_NAME="my-project"
 ```
-
-**Example with local Qwen3 model:**
-
-```bash
-export LANCEDB_PATH="./.opencode_memory/lance_db"
-export EMBEDDINGS_BACKEND="fastembed"
-export EMBEDDINGS_MODEL="qwen3-embed"
-export PROJECT_NAME="my-project"
-```
-
-> **Note:** The first run downloads the model (~100MB–8GB depending on model). Subsequent runs use the cached model with no network needed.
 
 ## Dashboard & REST API (Qdrant-style)
 

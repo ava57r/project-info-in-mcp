@@ -30,8 +30,10 @@ impl Config {
     /// Loads configuration from environment variables,
     /// falling back to defaults when unset or invalid.
     pub fn get_from_env() -> Config {
+        // `qdrant-client` talks to the server over gRPC, which Qdrant
+        // serves on 6334 (6333 is the REST/dashboard port).
         let qdrant_url =
-            env::var("QDRANT_URL").unwrap_or_else(|_| "http://localhost:6333".to_string());
+            env::var("QDRANT_URL").unwrap_or_else(|_| "http://localhost:6334".to_string());
 
         let qdrant_api_key = env::var("QDRANT_API_KEY").ok();
 
