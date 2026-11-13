@@ -23,6 +23,15 @@ impl EmbeddingBackend {
         match env::var("EMBEDDINGS_BACKEND").ok().as_deref() {
             #[cfg(feature = "fastembed")]
             Some("fastembed") => {
+                if env::var("FASTEMBED_CACHE_DIR").is_err() {
+                    if let Some(home) = dirs::home_dir() {
+                        let cache_dir = home.join(".cache").join("fastembed");
+                        unsafe {
+                            env::set_var("FASTEMBED_CACHE_DIR", cache_dir);
+                        }
+                    }
+                }
+
                 let model_name =
                     env::var("EMBEDDINGS_MODEL").unwrap_or_else(|_| "qwen3-embed".to_string());
                 Self::Fastembed(piim_fastembed::FastembedModel::from_http_name(&model_name))
